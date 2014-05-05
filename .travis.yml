@@ -6,12 +6,30 @@ php:
   - 5.5
   - 5.6
 
+env:
+  global:
+    - "MYSQL_SERVER_HOST=localhost"
+    - "MYSQL_SERVER_DB=wordpress"
+    - "MYSQL_SERVER_USER=wordpress"
+    - "MYSQL_SERVER_PASSWORD=wordpress"
+
 before_script:
+  - composer selfupdate
+  - composer --dev install
+  # database
+  - mysql -u root -e "create user $MYSQL_SERVER_USER@$MYSQL_SERVER_HOST identified by '$MYSQL_SERVER_PASSWORD';"
+  - mysql -u root -e "create database $MYSQL_SERVER_DB;"
+  - mysql -u root -e "grant all on $MYSQL_SERVER_DB.* to $MYSQL_SERVER_USER@$MYSQL_SERVER_HOST;"
+  # server stack
   - sudo apt-get update -y -q
   - sudo apt-get install nginx
   # enable php-fpm
   - cp ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf.default ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
   - echo "cgi.fix_pathinfo = 1" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
+  - echo "env[MYSQL_SERVER_HOST] = $MYSQL_SERVER_HOST" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
+  - echo "env[MYSQL_SERVER_DB] = $MYSQL_SERVER_DB" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
+  - echo "env[MYSQL_SERVER_USER] = $MYSQL_SERVER_USER" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
+  - echo "env[MYSQL_SERVER_PASSWORD] = $MYSQL_SERVER_PASSWORD" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
   - echo "env[CI] = true" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
   - echo "env[TRAVIS] = true" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
   - echo "env[CONTINUOUS_INTEGRATION] = true" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
@@ -22,10 +40,18 @@ before_script:
   - sudo sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\tclient_max_body_size 3m/" /etc/nginx/nginx.conf
   - cat nginx.conf | sed -e "s,%TRAVIS_BUILD_DIR%,`pwd`/web,g" | sudo tee /etc/nginx/sites-available/default > /dev/null
   - sudo service nginx restart
+  # configure selenium
+  - sh -e /etc/init.d/xvfb start
+  - export DISPLAY=:99.0
+  - sleep 4
+  - curl -L http://selenium-release.storage.googleapis.com/2.41/selenium-server-standalone-2.41.0.jar > selenium.jar
+  - sudo ln -s /usr/lib/firefox/firefox /usr/lib/firefox/firefox-bin
+  - PATH=$PATH:/usr/lib/firefox java -jar selenium.jar > /dev/null 2> /tmp/selenium_output.txt &
+  - sleep 4
 
 script:
-  - ~/.phpenv/versions/$(phpenv version-name)/sbin/php-fpm -v
-  - ~/.phpenv/versions/$(phpenv version-name)/sbin/php-fpm -m
-  - curl -I http://localhost
-  - curl http://localhost
-  - cat /var/log/nginx/error.log
+  - bin/behat -p travis
+  
+after_failure:
+  - netstat -tupan
+  - cat /tmp/selenium_output.txt
