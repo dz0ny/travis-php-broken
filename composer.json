@@ -1,0 +1,15 @@
+{
+    "require": {
+        "php": ">=5.3.0"
+    },
+    "require-dev":{
+        "behat/behat": "*",
+        "behat/mink": "*",
+        "behat/mink-extension": "*",
+        "behat/mink-selenium2-driver": "*"
+    },
+    "minimum-stability": "stable",
+    "config": {
+        "bin-dir": "bin/"
+    }
+}
